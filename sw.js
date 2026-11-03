@@ -1,6 +1,6 @@
 /* KeuanganKu Service Worker — Cache-First untuk aset statis (offline 100%).
  * PENTING: naikkan VERSION setiap kali Anda deploy perubahan agar cache lama diganti. */
-const VERSION = 'v1.0.0';
+const VERSION = 'v1.1.0';
 const CACHE = `keuanganku-${VERSION}`;
 
 const PRECACHE = [

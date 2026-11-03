@@ -1,0 +1,19 @@
+# dependencies
+node_modules/
+
+# vercel
+.vercel/
+
+# logs & env
+*.log
+npm-debug.log*
+.env
+.env.*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# NOTE: styles.css IS committed on purpose (compiled output) so Vercel needs no build step.

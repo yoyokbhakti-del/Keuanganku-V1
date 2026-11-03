@@ -237,14 +237,17 @@
     if (i >= 0) arr[i] = obj;
     else arr.push(obj);
     queueRender();
+    markDirty();
   }
   async function del(name, id) {
     await Store.del(name, id);
     S[name] = S[name].filter((x) => x.id !== id);
     queueRender();
+    markDirty();
   }
-  async function saveSettings() {
+  async function saveSettings(syncIt = true) {
     await Store.put('meta', { id: 'settings', ...S.settings });
+    if (syncIt) markDirty();
   }
 
   async function loadAll() {
@@ -889,6 +892,11 @@
           }
         </section>
 
+        <section class="card md:col-span-2">
+          <h2 class="card-title">Sinkronisasi Cloud</h2>
+          <div id="syncBox">${syncBoxHTML()}</div>
+        </section>
+
         <section class="card">
           <h2 class="card-title">Tampilan</h2>
           <div class="seg">
@@ -918,7 +926,7 @@
           <h2 class="card-title">Pasang di iPhone</h2>
           <p class="text-[14px] text-ios-secondary">Buka di Safari → ketuk <b>Bagikan</b> → <b>Tambah ke Layar Utama</b>. Aplikasi tampil layar penuh dan bisa dibuka offline.</p>
           <button class="btn btn-danger mt-4 w-full" data-act="resetAll">Hapus Semua Data</button>
-          <p class="mt-3 text-center text-[11px] text-ios-secondary">KeuanganKu v1.0.0</p>
+          <p class="mt-3 text-center text-[11px] text-ios-secondary">KeuanganKu v1.1.0</p>
         </section>
       </div>`;
   }
@@ -1410,6 +1418,7 @@
       ui.lastWallet = S.wallets[0]?.id || null;
       applyTheme();
       render();
+      markDirty();
       toast('Data berhasil dipulihkan');
     } catch (e) {
       console.error(e);
@@ -1488,6 +1497,298 @@
   };
 
   /* ==================================================================
+   * 8b. CLOUD SYNC (Supabase: login email + 1 baris snapshot per pengguna)
+   *  - Data tetap disimpan lokal (offline-first); cloud hanya salinan sinkron.
+   *  - Perubahan dikirim otomatis (debounce), dan diambil saat app dibuka/aktif.
+   *  - Kunci "publishable" aman ada di klien: akses dibatasi RLS per pengguna.
+   * ================================================================== */
+  const SB = { url: 'https://mwhibvrrarqzsbqilhoo.supabase.co', key: 'sb_publishable_Dm0KmePoeyC-MFmuzJ5u-g_02vXKKnJ' };
+  const SYNC_KEY = 'kf-sync';
+  function loadSync() {
+    try {
+      return JSON.parse(localStorage.getItem(SYNC_KEY)) || {};
+    } catch {
+      return {};
+    }
+  }
+  const sync = Object.assign({ access: '', refresh: '', exp: 0, email: '', rev: 0, dirty: false, last: 0 }, loadSync());
+  function saveSync() {
+    try {
+      localStorage.setItem(SYNC_KEY, JSON.stringify(sync));
+    } catch {}
+  }
+  const loggedIn = () => !!sync.refresh;
+  let syncing = false,
+    syncTimer = null,
+    syncErr = '',
+    ver = 0;
+
+  function markDirty() {
+    if (!loggedIn()) return;
+    ver++;
+    sync.dirty = true;
+    saveSync();
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => syncNow(), 2500);
+    updateSyncUI();
+  }
+
+  const authMsg = (m) =>
+    /invalid login/i.test(m) ? 'Email atau password salah'
+    : /already registered|already been registered/i.test(m) ? 'Email sudah terdaftar, silakan Masuk'
+    : /not confirmed/i.test(m) ? 'Email belum dikonfirmasi. Cek inbox Anda.'
+    : /signups? not allowed|disabled/i.test(m) ? 'Pendaftaran baru dinonaktifkan'
+    : /password/i.test(m) && /6|short|weak/i.test(m) ? 'Password minimal 6 karakter'
+    : /rate limit/i.test(m) ? 'Terlalu banyak percobaan, coba lagi nanti'
+    : m;
+
+  async function sbAuth(path, body) {
+    const r = await fetch(`${SB.url}/auth/v1/${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: SB.key },
+      body: JSON.stringify(body),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const e = new Error(authMsg(j.msg || j.error_description || j.message || `HTTP ${r.status}`));
+      e.status = r.status;
+      throw e;
+    }
+    return j;
+  }
+  function setSession(j) {
+    sync.access = j.access_token;
+    sync.refresh = j.refresh_token;
+    sync.exp = Date.now() + (j.expires_in || 3600) * 1000;
+    if (j.user && j.user.email) sync.email = j.user.email;
+    saveSync();
+  }
+  async function token() {
+    if (sync.access && Date.now() < sync.exp - 60000) return sync.access;
+    try {
+      setSession(await sbAuth('token?grant_type=refresh_token', { refresh_token: sync.refresh }));
+    } catch (e) {
+      if (e.status >= 400 && e.status < 500) {
+        signOut();
+        toast('Sesi berakhir, silakan masuk lagi', 'error', 4000);
+      }
+      throw e;
+    }
+    return sync.access;
+  }
+  async function rest(method, query, body) {
+    const t = await token();
+    const r = await fetch(`${SB.url}/rest/v1/kf_snapshots${query}`, {
+      method,
+      headers: { 'Content-Type': 'application/json', apikey: SB.key, Authorization: 'Bearer ' + t, Prefer: 'return=representation' },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const txt = await r.text();
+    let j = null;
+    try {
+      j = txt ? JSON.parse(txt) : null;
+    } catch {}
+    if (!r.ok) {
+      const e = new Error((j && (j.message || j.msg)) || `HTTP ${r.status}`);
+      e.status = r.status;
+      throw e;
+    }
+    return j;
+  }
+
+  const snapshot = () => ({
+    wallets: S.wallets,
+    transactions: S.transactions,
+    debts: S.debts,
+    budgets: S.budgets,
+    settings: { customCats: S.settings.customCats },
+  });
+  const isPristine = () => !S.transactions.length && !S.debts.length && !S.budgets.length && S.wallets.every((w) => !w.initial);
+
+  async function applyRemote(data) {
+    const clean = sanitizeBackup({ app: 'keuanganku', data });
+    clean.settings.theme = S.settings.theme; // tema tetap per perangkat
+    await Store.replaceAll({
+      wallets: clean.wallets,
+      transactions: clean.transactions,
+      debts: clean.debts,
+      budgets: clean.budgets,
+      meta: [{ id: 'settings', ...clean.settings }, { id: 'init', done: true }],
+    });
+    Object.assign(S, { wallets: clean.wallets, transactions: clean.transactions, debts: clean.debts, budgets: clean.budgets, settings: clean.settings });
+    if (!wallet(ui.lastWallet)) ui.lastWallet = S.wallets[0]?.id || null;
+    render();
+  }
+
+  // Gabungkan (union per id) bila dua perangkat sama-sama mengubah data sebelum sempat sinkron.
+  function mergeData(remote) {
+    const loc = snapshot();
+    const un = (a, b) => {
+      const m = new Map();
+      (b || []).forEach((x) => m.set(x.id, x));
+      a.forEach((x) => m.set(x.id, x)); // data perangkat ini menang bila id sama
+      return [...m.values()];
+    };
+    const seen = new Set();
+    const budgets = un(loc.budgets, remote.budgets).filter((b) => (seen.has(b.category) ? false : seen.add(b.category)));
+    const cc = (k) => [...new Set([...(loc.settings.customCats[k] || []), ...(remote.settings?.customCats?.[k] || [])])];
+    return {
+      wallets: un(loc.wallets, remote.wallets),
+      transactions: un(loc.transactions, remote.transactions),
+      debts: un(loc.debts, remote.debts),
+      budgets,
+      settings: { customCats: { expense: cc('expense'), income: cc('income') } },
+    };
+  }
+
+  async function push(base, data) {
+    const v = ver;
+    const body = data || snapshot();
+    let res;
+    try {
+      if (base == null) res = await rest('POST', '', { data: body, rev: 1 });
+      else {
+        res = await rest('PATCH', `?rev=eq.${base}`, { data: body, rev: base + 1, updated_at: new Date().toISOString() });
+        if (!res || !res.length) {
+          const e = new Error('conflict');
+          e.conflict = true;
+          throw e;
+        }
+      }
+    } catch (e) {
+      if (e.status === 409) e.conflict = true;
+      throw e;
+    }
+    const row = Array.isArray(res) ? res[0] : res;
+    sync.rev = row.rev;
+    sync.dirty = ver !== v; // perubahan yang terjadi selama proses kirim tetap ditandai
+    saveSync();
+  }
+
+  async function syncNow({ manual = false } = {}) {
+    if (!loggedIn() || syncing) return;
+    if (!navigator.onLine) {
+      if (manual) toast('Tidak ada koneksi internet', 'error');
+      return;
+    }
+    syncing = true;
+    syncErr = '';
+    updateSyncUI();
+    try {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const rows = await rest('GET', '?select=data,rev&limit=1');
+        const remote = rows && rows[0];
+        try {
+          if (!remote) {
+            if (!(sync.rev === 0 && isPristine())) await push(null);
+          } else if (remote.rev === sync.rev) {
+            if (sync.dirty) await push(remote.rev);
+          } else if (sync.rev === 0 && !isPristine()) {
+            // Pertama kali terhubung, dan perangkat ini sudah punya data berbeda dari cloud
+            if (await confirmBox({ title: 'Data cloud ditemukan', message: 'Data di cloud berbeda dengan data di perangkat ini. Ganti data perangkat ini dengan data cloud?', ok: 'Pakai Data Cloud', danger: false })) {
+              await applyRemote(remote.data);
+              sync.rev = remote.rev;
+              sync.dirty = false;
+            } else if (await confirmBox({ title: 'Timpa data cloud?', message: 'Data di cloud akan DIGANTI dengan data perangkat ini.', ok: 'Timpa Cloud' })) {
+              await push(remote.rev);
+            } else {
+              signOut();
+              toast('Sinkronisasi dibatalkan');
+              return;
+            }
+          } else if (!sync.dirty || sync.rev === 0) {
+            await applyRemote(remote.data);
+            sync.rev = remote.rev;
+            sync.dirty = false;
+          } else {
+            // konflik nyata: dua sisi berubah → gabungkan lalu kirim
+            const merged = mergeData(remote.data);
+            await applyRemote(merged);
+            await push(remote.rev, merged);
+            toast('Data dari dua perangkat digabungkan');
+          }
+          saveSync();
+          break;
+        } catch (e) {
+          if (e.conflict && attempt < 2) continue;
+          throw e;
+        }
+      }
+      sync.last = Date.now();
+      saveSync();
+    } catch (e) {
+      console.warn('sync gagal:', e);
+      syncErr = e.message === 'Failed to fetch' ? 'Tidak ada koneksi, akan dicoba lagi' : e.message;
+    } finally {
+      syncing = false;
+      updateSyncUI();
+      if (sync.dirty && loggedIn() && !syncErr) {
+        clearTimeout(syncTimer);
+        syncTimer = setTimeout(() => syncNow(), 2500);
+      }
+    }
+  }
+
+  function signOut() {
+    sync.access = sync.refresh = '';
+    sync.exp = 0;
+    sync.rev = 0;
+    sync.dirty = false;
+    saveSync();
+    updateSyncUI();
+  }
+
+  async function authSubmit(mode) {
+    const email = ($('#syncEmail') || {}).value?.trim();
+    const pw = ($('#syncPass') || {}).value;
+    if (!email || !pw) return toast('Isi email dan password', 'error');
+    if (pw.length < 6) return toast('Password minimal 6 karakter', 'error');
+    try {
+      const j = mode === 'signup' ? await sbAuth('signup', { email, password: pw }) : await sbAuth('token?grant_type=password', { email, password: pw });
+      if (!j.access_token) return toast('Cek email Anda untuk konfirmasi, lalu pilih Masuk.', 'info', 6000);
+      sync.rev = 0;
+      sync.dirty = false;
+      setSession(j);
+      updateSyncUI();
+      await syncNow({ manual: true });
+      if (!syncErr && loggedIn()) toast('Sinkronisasi aktif');
+    } catch (e) {
+      toast(e.message === 'Failed to fetch' ? 'Tidak ada koneksi internet' : e.message, 'error', 4500);
+    }
+  }
+
+  function syncBoxHTML() {
+    if (!loggedIn()) {
+      return `
+        <form id="syncForm" class="grid gap-3" novalidate>
+          <p class="text-[14px] text-ios-secondary">Masuk agar data otomatis tersinkron di HP dan laptop, sekaligus tersimpan aman di cloud.</p>
+          <input id="syncEmail" type="email" autocomplete="email" inputmode="email" class="input" placeholder="Email" />
+          <input id="syncPass" type="password" autocomplete="current-password" class="input" placeholder="Password (min. 6 karakter)" />
+          <div class="grid grid-cols-2 gap-2">
+            <button type="button" class="btn btn-primary" data-act="syncLogin">Masuk</button>
+            <button type="button" class="btn btn-gray" data-act="syncSignup">Daftar</button>
+          </div>
+        </form>`;
+    }
+    const when = sync.last ? new Date(sync.last).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+    const status = syncing ? 'Menyinkronkan…' : syncErr ? '⚠️ ' + esc(syncErr) : sync.dirty ? 'Perubahan menunggu dikirim…' : when ? '✓ Tersinkron ' + esc(when) : 'Belum disinkronkan';
+    return `
+      <div class="grid gap-3">
+        <div><p class="text-[13px] text-ios-secondary">Masuk sebagai</p><p class="break-all font-semibold">${esc(sync.email)}</p></div>
+        <p class="text-[14px] ${syncErr ? 'text-ios-red' : 'text-ios-secondary'}">${status}</p>
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" class="btn btn-soft" data-act="syncBtn">Sinkronkan Sekarang</button>
+          <button type="button" class="btn btn-gray" data-act="syncLogout">Keluar</button>
+        </div>
+        <p class="text-[12px] text-ios-secondary">Otomatis: saat aplikasi dibuka, tiap ada perubahan, dan berkala. Data tetap bisa dipakai offline.</p>
+      </div>`;
+  }
+  function updateSyncUI() {
+    const b = $('#syncBox');
+    if (b && !b.contains(document.activeElement)) b.innerHTML = syncBoxHTML();
+  }
+
+  /* ==================================================================
    * 9. ACTIONS & BOOT
    * ================================================================== */
   function applyTheme() {
@@ -1502,6 +1803,13 @@
 
   const ACT = {
     closeSheet: () => closeSheet(),
+    syncLogin: () => authSubmit('login'),
+    syncSignup: () => authSubmit('signup'),
+    syncBtn: () => syncNow({ manual: true }),
+    async syncLogout() {
+      if (!(await confirmBox({ title: 'Keluar dari sinkronisasi?', message: 'Data di perangkat ini tetap ada. Perubahan berikutnya tidak lagi dikirim ke cloud.', ok: 'Keluar' }))) return;
+      signOut();
+    },
     sheetBackdrop: (el, e) => e.target === el && closeSheet(),
     addTx: () => openTxSheet(),
     editTx: (el) => openTxSheet(S.transactions.find((t) => t.id === el.dataset.id)),
@@ -1526,7 +1834,7 @@
     importJSON: () => $('#fileImport').click(),
     setTheme(el) {
       S.settings.theme = el.dataset.v;
-      saveSettings();
+      saveSettings(false);
       applyTheme();
       render();
     },
@@ -1537,6 +1845,7 @@
       ui.lastWallet = null;
       applyTheme();
       render();
+      markDirty();
       toast('Semua data dihapus');
     },
     // Dompet
@@ -1617,6 +1926,15 @@
       e.target.value = '';
       if (f) importJSON(f);
     });
+    document.addEventListener('submit', (e) => {
+      if (e.target.id === 'syncForm') {
+        e.preventDefault();
+        authSubmit('login');
+      }
+    });
+    document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && syncNow());
+    window.addEventListener('online', () => syncNow());
+    setInterval(() => document.visibilityState === 'visible' && !sync.dirty && syncNow(), 90000);
     window.addEventListener('hashchange', onRoute);
     matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => S.settings.theme === 'auto' && applyTheme());
   }
@@ -1667,6 +1985,7 @@
     } catch {}
     onRoute();
     registerSW();
+    syncNow();
     const params = new URLSearchParams(location.search);
     if (params.get('action') === 'add') {
       history.replaceState(null, '', location.pathname + location.hash);
@@ -1675,6 +1994,6 @@
   }
 
   // Hook untuk pengujian/debug
-  window.__kf = { S, ui, rp, balances, debtInfo, monthStats };
+  window.__kf = { S, ui, rp, balances, debtInfo, monthStats, sync };
   boot();
 })();

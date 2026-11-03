@@ -12,3 +12,7 @@ Edit class Tailwind di `app.js` / `index.html`, lalu `npm install` (sekali) dan 
 
 ## Setiap deploy perubahan
 Naikkan `VERSION` di `sw.js` supaya cache lama diganti (pengguna akan melihat toast "Versi baru tersedia").
+
+## Sinkronisasi cloud (Supabase)
+Tabel `kf_snapshots` (RLS per pengguna) sudah dibuat di project Supabase `keuanganku`.
+Aplikasi: Lainnya → Sinkronisasi Cloud → Daftar / Masuk. Konfigurasi ada di konstanta `SB` pada `app.js`.
