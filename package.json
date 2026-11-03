@@ -1,0 +1,14 @@
+{
+  "name": "keuanganku-pwa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Personal Finance & Debt Tracker PWA (iOS style, offline-first)",
+  "scripts": {
+    "build:css": "tailwindcss -c tailwind.config.js -i src/input.css -o styles.css --minify",
+    "watch:css": "tailwindcss -c tailwind.config.js -i src/input.css -o styles.css --watch",
+    "serve": "npx --yes serve -l 3000 ."
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.17"
+  }
+}

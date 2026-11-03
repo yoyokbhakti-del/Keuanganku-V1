@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <!-- viewport-fit=cover: konten boleh sampai ke tepi layar; safe-area diatur lewat env() di CSS -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>KeuanganKu</title>
+  <meta name="description" content="Pencatat keuangan pribadi, utang & piutang, budget, dan arus kas. Offline-first." />
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.json" />
+  <meta name="theme-color" content="#f2f2f7" id="metaTheme" />
+  <meta name="mobile-web-app-capable" content="yes" />
+
+  <!-- iOS -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="KeuanganKu" />
+  <meta name="format-detection" content="telephone=no" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+
+  <link rel="stylesheet" href="/styles.css" />
+
+  <!-- Terapkan tema sebelum render pertama agar tidak berkedip -->
+  <script>
+    (function () {
+      try {
+        var t = localStorage.getItem('kf-theme') || 'auto';
+        var dark = t === 'dark' || (t === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (dark) document.documentElement.classList.add('dark');
+        document.getElementById('metaTheme').setAttribute('content', dark ? '#000000' : '#f2f2f7');
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <div id="app" class="min-h-dvh">
+    <!-- Sidebar (tablet & PC) -->
+    <aside id="sidebar" class="no-print fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-ios-sep/40 bg-ios-card/80 px-3 pb-6 pt-[calc(env(safe-area-inset-top)+20px)] backdrop-blur-xl md:flex">
+      <div class="mb-6 flex items-center gap-3 px-2">
+        <img src="/icons/icon-192.png" alt="" class="h-10 w-10 rounded-[10px]" />
+        <div>
+          <p class="text-[17px] font-bold leading-tight">KeuanganKu</p>
+          <p class="text-[12px] text-ios-secondary">Keuangan &amp; Utang</p>
+        </div>
+      </div>
+      <nav id="sideNav" class="flex flex-col gap-1"></nav>
+      <div class="mt-auto px-1">
+        <button data-act="addTx" class="btn btn-primary w-full">＋ Transaksi Baru</button>
+      </div>
+    </aside>
+
+    <!-- Konten utama -->
+    <main class="md:pl-64">
+      <div id="view" class="mx-auto max-w-6xl px-4 pb-[calc(env(safe-area-inset-bottom)+150px)] md:px-8 md:pb-16">
+        <div class="py-24 text-center text-ios-secondary">Memuat…</div>
+      </div>
+    </main>
+
+    <!-- Bottom Tab Bar (mobile) -->
+    <nav id="tabbar" class="no-print glass fixed inset-x-0 bottom-0 z-30 flex border-t border-ios-sep/40 pb-[env(safe-area-inset-bottom)] md:hidden"></nav>
+
+    <!-- Floating Action Button -->
+    <button id="fab" data-act="addTx" aria-label="Tambah transaksi"
+      class="no-print fixed bottom-[calc(env(safe-area-inset-bottom)+72px)] right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-ios-blue text-white shadow-lg shadow-ios-blue/40 transition active:scale-95 md:hidden">
+      <svg viewBox="0 0 24 24" class="h-7 w-7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14" /></svg>
+    </button>
+  </div>
+
+  <div id="sheetRoot"></div>
+  <div id="dialogRoot"></div>
+  <div id="toastRoot" class="pointer-events-none fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+140px)] z-[70] flex flex-col items-center gap-2 px-4 md:bottom-8"></div>
+
+  <!-- Area cetak laporan A4 (hanya tampil saat print / Simpan PDF) -->
+  <section id="printArea"></section>
+
+  <input type="file" id="fileImport" accept="application/json,.json" hidden />
+
+  <noscript><p style="padding:24px;font-family:sans-serif">Aplikasi ini membutuhkan JavaScript.</p></noscript>
+  <script src="/app.js" defer></script>
+</body>
+</html>

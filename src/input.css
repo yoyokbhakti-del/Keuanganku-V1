@@ -1,0 +1,216 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- iOS design tokens (RGB channels so Tailwind alpha works) ---------- */
+@layer base {
+  :root {
+    --bg: 242 242 247;
+    --card: 255 255 255;
+    --fill: 242 242 247;
+    --label: 0 0 0;
+    --secondary: 125 125 132;
+    --sep: 198 198 200;
+    --blue: 0 122 255;
+    --green: 52 199 89;
+    --red: 255 59 48;
+    --orange: 255 149 0;
+    --yellow: 255 204 0;
+    --purple: 175 82 222;
+    color-scheme: light;
+  }
+  .dark {
+    --bg: 0 0 0;
+    --card: 28 28 30;
+    --fill: 44 44 46;
+    --label: 255 255 255;
+    --secondary: 152 152 159;
+    --sep: 84 84 88;
+    --blue: 10 132 255;
+    --green: 48 209 88;
+    --red: 255 69 58;
+    --orange: 255 159 10;
+    --yellow: 255 214 10;
+    --purple: 191 90 242;
+    color-scheme: dark;
+  }
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-ios-bg text-ios-label font-sans antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+  input, select, textarea, button {
+    font: inherit;
+    color: inherit;
+  }
+  /* 16px prevents iOS Safari auto-zoom on focus */
+  input, select, textarea {
+    font-size: 16px;
+  }
+  button {
+    cursor: pointer;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-ios-card/75 backdrop-blur-xl backdrop-saturate-150;
+  }
+  .glass-top {
+    @apply bg-ios-bg/80 backdrop-blur-xl backdrop-saturate-150;
+  }
+  .card {
+    @apply bg-ios-card rounded-2xl p-4 shadow-sm;
+    min-width: 0;
+  }
+  .card-title {
+    @apply text-[13px] font-semibold uppercase tracking-wide text-ios-secondary mb-3;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-[16px] font-semibold select-none transition active:opacity-60;
+  }
+  .btn-primary {
+    @apply bg-ios-blue text-white;
+  }
+  .btn-soft {
+    @apply bg-ios-blue/10 text-ios-blue;
+  }
+  .btn-gray {
+    @apply bg-ios-fill text-ios-label;
+  }
+  .btn-danger {
+    @apply bg-ios-red/10 text-ios-red;
+  }
+  .icon-btn {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-full bg-ios-card text-ios-blue shadow-sm active:opacity-60;
+  }
+  .input {
+    @apply w-full rounded-xl bg-ios-fill px-3.5 py-3 text-ios-label outline-none placeholder:text-ios-secondary/70 focus:ring-2 focus:ring-ios-blue/40;
+    min-width: 0;
+  }
+  select.input {
+    @apply appearance-none pr-8;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+  }
+  .lbl {
+    @apply mb-1.5 block text-[13px] font-medium text-ios-secondary;
+  }
+  .seg {
+    @apply flex rounded-[10px] bg-ios-fill p-[3px];
+  }
+  .seg > button {
+    @apply flex-1 rounded-[8px] px-2 py-1.5 text-[14px] font-semibold text-ios-label/80 transition;
+  }
+  .seg > button.active {
+    @apply bg-ios-card text-ios-label shadow;
+  }
+  .dark .seg > button.active {
+    background: rgb(99 99 102);
+  }
+  .amount-box {
+    @apply flex items-center justify-center gap-2 rounded-2xl bg-ios-fill px-4 py-4;
+  }
+  .amount-box > span {
+    @apply text-[22px] font-semibold text-ios-secondary;
+  }
+  .amount-box > input {
+    @apply w-full min-w-0 bg-transparent text-[34px] font-bold outline-none placeholder:text-ios-secondary/40;
+    font-size: 34px;
+  }
+  .row {
+    @apply flex w-full items-center gap-3 py-2.5 text-left;
+  }
+  .row + .row {
+    @apply border-t border-ios-sep/40;
+  }
+  .badge {
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold;
+  }
+  .nav-item {
+    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-[15px] font-medium text-ios-label/80 transition hover:bg-ios-fill;
+  }
+  .nav-item.active {
+    @apply bg-ios-blue/10 text-ios-blue;
+  }
+  .tab-item {
+    @apply flex flex-1 flex-col items-center gap-0.5 pt-2 pb-1 text-[10px] font-medium text-ios-secondary;
+  }
+  .tab-item.active {
+    @apply text-ios-blue;
+  }
+
+  /* ----- Bottom sheet / modal ----- */
+  .sheet-backdrop {
+    @apply fixed inset-0 z-50 flex items-end justify-center bg-black/40 md:items-center;
+    animation: fade 0.2s ease-out;
+  }
+  .sheet {
+    @apply relative flex max-h-[94dvh] w-full flex-col overflow-hidden rounded-t-[22px] bg-ios-bg md:max-w-lg md:rounded-[22px];
+    animation: slideUp 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .sheet-head {
+    @apply flex shrink-0 items-center justify-between border-b border-ios-sep/40 bg-ios-card px-4 py-3.5;
+  }
+  .sheet-body {
+    @apply space-y-4 overflow-y-auto p-4;
+    padding-bottom: calc(env(safe-area-inset-bottom) + 24px);
+    -webkit-overflow-scrolling: touch;
+  }
+  .dialog-backdrop {
+    @apply fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-6;
+    animation: fade 0.15s ease-out;
+  }
+  .dialog {
+    @apply w-full max-w-[290px] overflow-hidden rounded-2xl bg-ios-card/95 backdrop-blur-xl;
+    animation: pop 0.2s ease-out;
+  }
+  .toast {
+    @apply pointer-events-auto mx-auto w-fit max-w-[90vw] rounded-full bg-ios-label px-4 py-2.5 text-[14px] font-medium text-ios-bg shadow-lg;
+    animation: pop 0.2s ease-out;
+  }
+  .toast.error {
+    @apply bg-ios-red text-white;
+  }
+}
+
+@keyframes fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { transform: translateY(40px); opacity: 0.4; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes pop {
+  from { transform: scale(0.94); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* ---------- Print / PDF A4 ---------- */
+#printArea { display: none; }
+
+@media print {
+  @page { size: A4; margin: 14mm 12mm; }
+  html, body { background: #fff !important; color: #000 !important; }
+  body > *:not(#printArea) { display: none !important; }
+  #printArea { display: block !important; font-family: Arial, Helvetica, sans-serif; font-size: 10.5pt; color: #000; }
+  #printArea h1 { font-size: 18pt; margin: 0 0 2pt; }
+  #printArea h2 { font-size: 12pt; margin: 14pt 0 5pt; border-bottom: 1px solid #999; padding-bottom: 2pt; }
+  #printArea .meta { color: #555; font-size: 9pt; margin-bottom: 8pt; }
+  #printArea .sum { display: flex; gap: 8pt; margin: 6pt 0; }
+  #printArea .sum > div { flex: 1; border: 1px solid #bbb; border-radius: 4pt; padding: 5pt 7pt; }
+  #printArea .sum small { display: block; color: #555; font-size: 8pt; }
+  #printArea .sum b { font-size: 11.5pt; }
+  #printArea table { width: 100%; border-collapse: collapse; font-size: 9pt; }
+  #printArea th { text-align: left; background: #eee; border-bottom: 1px solid #888; padding: 3pt 4pt; }
+  #printArea td { border-bottom: 1px solid #ddd; padding: 3pt 4pt; vertical-align: top; }
+  #printArea tr { page-break-inside: avoid; }
+  #printArea .r { text-align: right; white-space: nowrap; }
+  #printArea .in { color: #0a7a2f; }
+  #printArea .out { color: #b3261e; }
+}
